@@ -1,0 +1,9 @@
+- download neo4j desktop
+- create a password, preferably `ahmedfpl` to avoid push conflicts
+- run `create_kg.py` to populate knowledge graph
+- run `generate_embeddings.py` to populate vector space embeddings in neo4j desktop itself
+- create venv
+- activate venv
+- pip install requirements.txt
+- create .env using .env.template and add deepseek api key and hugging face token
+- streamlit run main.py

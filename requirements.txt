@@ -1,0 +1,59 @@
+# -----------------------------
+# Core Python Libraries
+# -----------------------------
+numpy==1.26.4
+pandas==2.2.2
+
+# -----------------------------
+# Neo4j Database
+# -----------------------------
+neo4j==5.20.0
+
+# -----------------------------
+# Embedding Models
+# -----------------------------
+sentence-transformers==2.7.0
+torch==2.2.0
+transformers==4.40.0
+
+# -----------------------------
+# LLM Inference
+# -----------------------------
+huggingface-hub==0.23.0
+openai==1.43.0
+deepseek
+
+# -----------------------------
+# NLP for Entities
+# -----------------------------
+spacy==3.7.4
+thefuzz==0.22.1
+python-Levenshtein==0.25.0
+
+# -----------------------------
+# Web UI (Streamlit)
+# -----------------------------
+streamlit==1.36.0
+
+# -----------------------------
+# Utility / Config
+# -----------------------------
+python-dotenv==1.0.1
+requests==2.31.0
+
+# -----------------------------
+# Optional Graph Visualization
+# -----------------------------
+networkx==3.2.1
+graphviz==0.20.3
+
+# -----------------------------
+# Development (Optional)
+# -----------------------------
+black==24.4.0
+ruff==0.4.4
+
+fuzzywuzzy
+
+faiss-cpu 
+rapidfuzz
