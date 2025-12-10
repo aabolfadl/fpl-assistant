@@ -22,6 +22,7 @@ from fuzzywuzzy import fuzz
 
 from modules.db_manager import Neo4jGraph
 from config.stat_variants import STAT_VARIANTS
+from config.team_name_variants import TEAM_ABBREV
 
 
 # ----------------------------
@@ -46,16 +47,17 @@ def extract_entities(user_query: str) -> Dict[str, List[str]]:
         "positions": [],
         "seasons": [],
         "statistics": [],
+        "budget": [],
     }
 
     query_lower = user_query.lower()
-    
+
     # Run spaCy NER pipeline to extract named entities
     doc = nlp(user_query)
-     
+
     # Extract PERSON entities as potential player names from the spacy NER(DIDNT WORK AT ALL)
-    #spacy_persons = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
-    
+    # spacy_persons = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
+
     # Extract ORG entities as potential team names from the spacy NER
     spacy_orgs = [ent.text for ent in doc.ents if ent.label_ == "ORG"]
 
@@ -70,10 +72,47 @@ def extract_entities(user_query: str) -> Dict[str, List[str]]:
     # Positions
     # ------------------
     position_variants = {
-        "DEF": ["defender", "defenders", "defence", "defense", "backline", "def", "back"],
-        "MID": ["midfielder", "midfielders", "midfield", "mid"],
-        "FWD": ["forward", "forwards", "attacker", "attackers", "striker", "strikers", "attack", "fwd"],
-        "GK": ["goalkeeper", "goalkeepers", "keeper", "keepers", "goalies", "goalie", "gk"],
+        "DEF": [
+            "defender",
+            "defenders",
+            "defence",
+            "defense",
+            "backline",
+            "def",
+            "back",
+            "centre back",
+            "center back",
+            "fullback",
+            "full back",
+            "wing back",
+            "wingback",
+            "centre backs",
+            "center backs",
+            "fullbacks",
+            "full backs",
+            "wing backs",
+            "wingbacks",
+        ],
+        "MID": ["midfielder", "midfielders", "midfield", "mid", "winger", "wingers"],
+        "FWD": [
+            "forward",
+            "forwards",
+            "attacker",
+            "attackers",
+            "striker",
+            "strikers",
+            "attack",
+            "fwd",
+        ],
+        "GK": [
+            "goalkeeper",
+            "goalkeepers",
+            "keeper",
+            "keepers",
+            "goalies",
+            "goalie",
+            "gk",
+        ],
     }
     for code, variants in position_variants.items():
         for var in variants:
@@ -92,86 +131,24 @@ def extract_entities(user_query: str) -> Dict[str, List[str]]:
     # Teams
     # ------------------
     all_teams = fetch_all_names_from_db("Team", "name")
-    
+
     # Team abbreviations mapping - mapped to EXACT names in database
-    team_abbrev = {
-        "mci": "Man City",
-        "manchester city": "Man City",
-        "mancity": "Man City",
-        "city": "Man City",
-        "mun": "Man Utd",
-        "manchester united": "Man Utd",
-        "manchester utd": "Man Utd",
-        "manutd": "Man Utd",
-        "united": "Man Utd",
-        "liv": "Liverpool",
-        "liver": "Liverpool",
-        "lfc": "Liverpool",
-        "che": "Chelsea",
-        "ars": "Arsenal",
-        "gunners": "Arsenal",
-        "tot": "Spurs",
-        "tottenham": "Spurs",
-        "Tottenham Hotspur": "Spurs",
-        "lei": "Leicester",
-        "whu": "West Ham",
-        "hammers": "West Ham",
-        "west ham united": "West Ham",
-        "eve": "Everton",
-        "avl": "Aston Villa",
-        "villa": "Aston Villa",\
-        "Aston": "Aston Villa",
-        "new": "Newcastle",
-        "newcastle utd": "Newcastle",
-        "newcastle united": "Newcastle",
-        "nufc": "Newcastle",
-        "bha": "Brighton",
-        "brighton": "Brighton",
-        "brighton & hove albion": "Brighton",
-        "wol": "Wolves",
-        "wolverhampton": "Wolves",
-        "Wolverhampton Wanderers": "Wolves",
-        "sou": "Southampton",
-        "saints": "Southampton",
-        "cry": "Crystal Palace",
-        "palace": "Crystal Palace",
-        "cpfc": "Crystal Palace",
-        "crystal": "Crystal Palace",
-        "ful": "Fulham",
-        "bou": "Bournemouth",
-        "AFC Bournemouth": "Bournemouth",
-        "bur": "Burnley",
-        "lee": "Leeds",
-        "Leeds United": "Leeds",
-        "lufc": "Leeds",
-        "nor": "Norwich",
-        "Norwich City": "Norwich",
-        "ncfc": "Norwich",
-        "wat": "Watford",
-        "bre": "Brentford",
-        "nffc": "Nott'm Forest",
-        "nottingham": "Nott'm Forest",
-        "forest": "Nott'm Forest",
-        "nott'm": "Nott'm Forest",
-    }
-    
+    team_abbrev = TEAM_ABBREV
+
     # First, check for team abbreviations (like we do name parts for players)
     for abbrev, full_name in team_abbrev.items():
-        if re.search(r'\b' + re.escape(abbrev) + r'\b', query_lower):
+        if re.search(r"\b" + re.escape(abbrev) + r"\b", query_lower):
             if full_name in all_teams and full_name not in entities["teams"]:
                 entities["teams"].append(full_name)
-    
+
     # Second, use spaCy's ORG entities and fuzzy match them
     for org in spacy_orgs:
         best_match = process.extractOne(
-            org, 
-            all_teams, 
-            scorer=fuzz.token_sort_ratio, 
-            score_cutoff=85
+            org, all_teams, scorer=fuzz.token_sort_ratio, score_cutoff=85
         )
         if best_match and best_match[0] not in entities["teams"]:
             entities["teams"].append(best_match[0])
-    
+
     # Third, check for exact substring matches (case-insensitive)
     for team in all_teams:
         if team.lower() in query_lower:
@@ -183,29 +160,31 @@ def extract_entities(user_query: str) -> Dict[str, List[str]]:
     # ------------------
     all_players = fetch_all_names_from_db("Player", "player_name")
     matched_players = []
-    
+
     # Approach 1: Full name fuzzy matching (handles "Mohamed Salah stats")
     for player_name in all_players:
         score = fuzz.token_set_ratio(player_name.lower(), query_lower)
         if score >= 80:
             matched_players.append((player_name, score))
-    
+
     # Approach 2: Partial name matching (handles "Salah goals", "Son assists")
     # Only check if we haven't found good matches yet
     if len(matched_players) < 2:
         for player_name in all_players:
             name_parts = player_name.lower().split()
-            
+
             for part in name_parts:
                 # Check if a name part appears as a standalone word in the query
-                if len(part) >= 3 and re.search(r'\b' + re.escape(part) + r'\b', query_lower):
+                if len(part) >= 3 and re.search(
+                    r"\b" + re.escape(part) + r"\b", query_lower
+                ):
                     # Verify this isn't already matched
                     if not any(player_name == m[0] for m in matched_players):
                         # Score based on how unique/long the matching part is
                         score = fuzz.token_set_ratio(player_name.lower(), query_lower)
                         matched_players.append((player_name, score))
                     break
-    
+
     matched_players.sort(key=lambda x: x[1], reverse=True)
     seen = set()
     for name, score in matched_players:
@@ -217,36 +196,40 @@ def extract_entities(user_query: str) -> Dict[str, List[str]]:
     # Seasons
     # ------------------
     # Match exact season patterns like "2021-22" or "21-22"
-    season_pattern = r'\b(2021-22|2022-23|21-22|22-23)\b'
+    season_pattern = r"\b(2021-22|2022-23|21-22|22-23)\b"
     season_matches = re.findall(season_pattern, user_query, re.IGNORECASE)
-    
+
     season_map = {
         "21-22": "2021-22",
         "2021-22": "2021-22",
         "22-23": "2022-23",
         "2022-23": "2022-23",
     }
-    
+
     for match in season_matches:
         normalized = season_map.get(match.lower())
         if normalized and normalized not in entities["seasons"]:
             entities["seasons"].append(normalized)
-    
+
     # Fallback: Find standalone years like "season 22"
     if not entities["seasons"]:  # Only if no exact season pattern matched
         year_map = {
             21: "2021-22",
             2021: "2021-22",
-            22: "2022-23",
+            23: "2022-23",
             2022: "2022-23",
         }
-        year_matches = re.findall(r'\b(20\d{2}|2[12])\b', user_query)
+        year_matches = re.findall(r"\b(20\d{2}|2[12])\b", user_query)
         for year in year_matches:
             year_int = int(year)
             if year_int in year_map:
                 season = year_map[year_int]
                 if season not in entities["seasons"]:
                     entities["seasons"].append(season)
+
+    # If no seasons detected so far, append default "2022-23"
+    if len(entities["seasons"]) == 0:
+        entities["seasons"].append("2022-23")
 
     # ------------------
     # Statistics
@@ -255,7 +238,7 @@ def extract_entities(user_query: str) -> Dict[str, List[str]]:
         for var in variants:
             # For very short variants (2-3 chars), use word boundaries to avoid false matches
             if len(var) <= 3:
-                if re.search(r'\b' + re.escape(var) + r'\b', query_lower):
+                if re.search(r"\b" + re.escape(var) + r"\b", query_lower):
                     if stat not in entities["statistics"]:
                         entities["statistics"].append(stat)
                         break
@@ -270,6 +253,18 @@ def extract_entities(user_query: str) -> Dict[str, List[str]]:
                     if stat not in entities["statistics"]:
                         entities["statistics"].append(stat)
                         break
+
+    # ------------------
+    # Budget (Player Value)
+    # ------------------
+    # Matches: X.X
+    budget_matches = re.findall(r"\b\d{1,2}\.\d\b", query_lower)
+
+    if budget_matches:
+        entities["budget"] = [float(val) for val in budget_matches]
+    else:
+        # Default budget if user did not specify
+        entities["budget"] = [6.0]
 
     return entities
 
