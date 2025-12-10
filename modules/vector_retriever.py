@@ -1,5 +1,6 @@
 # modules/vector_retriever.py
 
+
 import os
 import json
 import numpy as np
@@ -7,6 +8,7 @@ from neo4j import GraphDatabase
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 import faiss
+import streamlit as st
 
 # Load .env DO NOT REMOVE THIS because settings.py is not imported here
 load_dotenv()
@@ -30,28 +32,36 @@ FAISS_INDEX_B_PATH = os.getenv("FAISS_INDEX_B_PATH")
 MAPPING_A_PATH = os.getenv("MAPPING_A_PATH")
 MAPPING_B_PATH = os.getenv("MAPPING_B_PATH")
 
-driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USERNAME, NEO4J_PASSWORD))
+
+@st.cache_resource(show_spinner=False)
+def get_driver():
+    return GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USERNAME, NEO4J_PASSWORD))
+
+
+driver = get_driver()
 
 
 # =======================
 # LOAD MODELS + INDEXES
 # =======================
 
-print("Loading SentenceTransformer models and FAISS indexes into memory...")
 
-model_A = SentenceTransformer(MODEL_A_NAME)
-model_B = SentenceTransformer(MODEL_B_NAME)
+@st.cache_resource(show_spinner=False)
+def get_models_and_indexes():
+    print("Loading SentenceTransformer models and FAISS indexes into memory...")
+    model_A = SentenceTransformer(MODEL_A_NAME)
+    model_B = SentenceTransformer(MODEL_B_NAME)
+    index_A = faiss.read_index(FAISS_INDEX_A_PATH)
+    index_B = faiss.read_index(FAISS_INDEX_B_PATH)
+    with open(MAPPING_A_PATH, "r") as f:
+        mapping_A = json.load(f)
+    with open(MAPPING_B_PATH, "r") as f:
+        mapping_B = json.load(f)
+    print("All embedding models and indexes loaded successfully.")
+    return model_A, model_B, index_A, index_B, mapping_A, mapping_B
 
-index_A = faiss.read_index(FAISS_INDEX_A_PATH)
-index_B = faiss.read_index(FAISS_INDEX_B_PATH)
 
-with open(MAPPING_A_PATH, "r") as f:
-    mapping_A = json.load(f)
-
-with open(MAPPING_B_PATH, "r") as f:
-    mapping_B = json.load(f)
-
-print("All embedding models and indexes loaded successfully.")
+model_A, model_B, index_A, index_B, mapping_A, mapping_B = get_models_and_indexes()
 
 
 # =========================

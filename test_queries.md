@@ -10,7 +10,7 @@
 
    - "Compare Erling Haaland and Harry Kane by total points"
 
-3. **COMPARE_PLAYERS_BY_SPECIFIC_STAT_SUM** 
+3. **COMPARE_PLAYERS_BY_SPECIFIC_STAT_TOTAL_ALL_TIME**
 
    - "Compare Mohamed Salah and Kevin De Bruyne in total assists"
 

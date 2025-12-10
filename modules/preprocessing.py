@@ -227,10 +227,6 @@ def extract_entities(user_query: str) -> Dict[str, List[str]]:
                 if season not in entities["seasons"]:
                     entities["seasons"].append(season)
 
-    # If no seasons detected so far, append default "2022-23"
-    if len(entities["seasons"]) == 0:
-        entities["seasons"].append("2022-23")
-
     # ------------------
     # Statistics
     # ------------------

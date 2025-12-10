@@ -27,7 +27,6 @@
 
 - Who are the top scoring players in [position]?
 - Who are the top players by [stat] (goals, assists, clean sheets, etc.)?
-- Who are the top players under a budget of [value]?
 - Who offers the best value for money?
 
 ## Team Analysis & Fixtures

@@ -49,7 +49,7 @@ def classify_with_deepseek(
             {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.0,
-        "max_tokens": 16,
+        "max_tokens": 20,
     }
 
     headers = {

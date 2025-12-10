@@ -100,6 +100,10 @@ def retrieve_data_via_cypher(intent: str, entities: Dict[str, Any], limit: int =
     required = required_params_map.get(intent, [])
 
     missing = [p for p in required if p not in params]
+    # If only 'season' is required and missing, set season to '2022-23'
+    if missing == ["season"]:
+        params["season"] = "2022-23"
+        missing = [p for p in required if p not in params]
     if missing:
         return {
             "intent": intent,
