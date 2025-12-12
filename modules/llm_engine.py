@@ -18,6 +18,8 @@ Rules:
 - Do NOT guess or hallucinate.
 - If the context does not contain the answer, say so.
 - Keep output concise, analytical, and actionable.
+- At the end of every response, suggest one relevant suggested follow-up question the user might ask.
+
 
 Now read the context carefully.
 """

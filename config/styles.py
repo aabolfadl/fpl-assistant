@@ -19,6 +19,16 @@ STYLE = """
         font-weight: normal !important;
     }
 
+    /* Fix number input stepper (+/-) button color in sidebar */
+    [data-testid="stSidebar"] .stNumberInput button svg {
+        fill: black !important;
+    }
+
+    /* Fix selectbox dropdown arrow color in sidebar */
+    [data-testid="stSidebar"] .stSelectbox svg {
+        fill: black !important;
+    }
+
     /* 4. Target the Dropdown Options (the list that appears when clicked) */
     div[role="listbox"] div {
         color: black !important;

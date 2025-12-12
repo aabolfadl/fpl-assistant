@@ -33,7 +33,7 @@ def classify_with_deepseek(
     system_prompt = (
         "You are a concise classifier. Given a user query related to fantasy premier league and "
         "a list of option labels of cypher queries to be executed to match the user query, "
-        "choose up to 3 most relevant labels (comma-separated, no explanation). "
+        "choose 1-3 most relevant labels (comma-separated, no explanation). Usually 1 label suffices "
         "Return only the matching option labels, separated by commas. "
         "Do not add punctuation, explanation, or any extra text."
     )

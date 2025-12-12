@@ -181,7 +181,9 @@ if user_input:
         ]
     else:
         if retrieval_mode == "Baseline (Cypher)":
-            retrieved_context = []
+            # Use predefined cypher templates to retrieve data from prepopulated knowledge graph
+            # For each detected intent, run the corresponding cypher query
+            cypher_results = []
             for intent in intents:
                 try:
                     ctx = cypher_retriever.retrieve_data_via_cypher(
@@ -200,8 +202,12 @@ if user_input:
                     if show_debug:
                         st.write(f"Cypher retrieval error for {intent}:")
                         st.text(str(e))
-                retrieved_context.append(ctx)
+                cypher_results.append(ctx)
+            # Filter out entries with an 'error' field
+            retrieved_context = [res for res in cypher_results if not res.get("error")]
         elif retrieval_mode == "Embeddings (Vector)":
+            # Use vector embeddings to retrieve relevant text snippets from corpus
+            # Single vector search for all nodes
             try:
                 retrieved_context = vector_retriever.vector_search(
                     entities, top_k=k, model_choice=embedding_model_choice
@@ -216,6 +222,7 @@ if user_input:
                     st.write("Vector retrieval error:")
                     st.text(str(e))
         else:  # Hybrid
+            # Combine cypher + vector retrieval
             cypher_contexts = []
             for intent in intents:
                 try:
@@ -228,6 +235,10 @@ if user_input:
                         st.write(f"Cypher retrieval error (hybrid) for {intent}:")
                         st.text(str(e))
                 cypher_contexts.append(c_res)
+            # Filter out cypher entries with an 'error' field
+            filtered_cypher_contexts = [
+                res for res in cypher_contexts if not res.get("error")
+            ]
             try:
                 v_res = vector_retriever.vector_search(
                     entities, top_k=k, model_choice=embedding_model_choice
@@ -238,7 +249,7 @@ if user_input:
                     st.write("Vector retrieval error (hybrid):")
                     st.text(str(e))
 
-            retrieved_context = {"cypher": cypher_contexts, "vector": v_res}
+            retrieved_context = {"cypher": filtered_cypher_contexts, "vector": v_res}
 
     # LLM response
 
