@@ -11,11 +11,11 @@ load_dotenv()
 
 def classify_with_deepseek(
     query: str, options: List[str], api_key: Optional[str] = None, timeout: int = 10
-) -> str:
+) -> list:
     """
-    Call Deepseek chat to map `query` to one of the provided `options`.
-    Returns exactly one of the options (matching the original casing) when possible,
-    otherwise returns the raw model output stripped.
+    Call Deepseek chat to map `query` to up to 3 of the provided `options`.
+    Returns a list of up to 3 options (matching the original casing) when possible,
+    otherwise returns the raw model output as a list of strings.
 
     - Reads DEEPSEEK_API_KEY & DEEPSEEK_API_URL from environment.
     """
@@ -33,11 +33,12 @@ def classify_with_deepseek(
     system_prompt = (
         "You are a concise classifier. Given a user query related to fantasy premier league and "
         "a list of option labels of cypher queries to be executed to match the user query, "
-        "choose the single best matching label. Respond with exactly one token: the label. "
+        "choose up to 3 most relevant labels (comma-separated, no explanation). "
+        "Return only the matching option labels, separated by commas. "
         "Do not add punctuation, explanation, or any extra text."
     )
 
-    user_prompt = f"Query: \"{query}\"\nOptions: {', '.join(options)}\nReturn only the matching option label."
+    user_prompt = f"Query: \"{query}\"\nOptions: {', '.join(options)}\nReturn up to 3 matching option labels, comma-separated."
 
     # Allow specifying model via env var; default to Deepseek chat model
     model_name = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
@@ -49,7 +50,7 @@ def classify_with_deepseek(
             {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.0,
-        "max_tokens": 20,
+        "max_tokens": 32,
     }
 
     headers = {
@@ -98,20 +99,24 @@ def classify_with_deepseek(
 
     content = content.strip()
 
-    # Normalize and try to map to one of the provided options (case-insensitive)
+    # Split by comma, strip whitespace, filter empty
+    tokens = [t.strip() for t in content.split(",") if t.strip()]
+    # Map to original casing if possible
     lowered_to_orig = {opt.lower(): opt for opt in options}
-    # Also allow matching by token that contains the option (e.g., model might return "PLAYER_STATS\n")
-    tokens = [t.strip() for t in content.splitlines() if t.strip()]
-    first_token = tokens[0] if tokens else content
-
-    candidate = first_token.strip().lower()
-    if candidate in lowered_to_orig:
-        return lowered_to_orig[candidate]
-
-    # If exact not found, try to find any option substring in content
-    for low_opt, orig_opt in lowered_to_orig.items():
-        if low_opt in content.lower():
-            return orig_opt
-
-    # As last resort, return raw content
-    return content
+    mapped = []
+    for token in tokens:
+        key = token.lower()
+        if key in lowered_to_orig:
+            mapped.append(lowered_to_orig[key])
+        else:
+            # Try substring match
+            found = False
+            for low_opt, orig_opt in lowered_to_orig.items():
+                if low_opt in key:
+                    mapped.append(orig_opt)
+                    found = True
+                    break
+            if not found:
+                mapped.append(token)
+    # Limit to 3
+    return mapped[:3]

@@ -17,8 +17,7 @@ the user's question using ONLY the data provided in the context below.
 Rules:
 - Do NOT guess or hallucinate.
 - If the context does not contain the answer, say so.
-- When suggesting transfers, mention next fixture difficulty if available.
-- Keep output short, analytical, and actionable.
+- Keep output concise, analytical, and actionable.
 
 Now read the context carefully.
 """
@@ -65,7 +64,7 @@ def deepseek_generate_answer(user_query: str, context_data: Dict[str, Any]) -> s
             {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.0,
-        "max_tokens": 512,
+        "max_tokens": 1024,
     }
 
     headers = {
@@ -124,7 +123,7 @@ def _hf_chat_completion(model: str, system_prompt: str, user_prompt: str) -> str
             {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.0,
-        "max_tokens": 512,
+        "max_tokens": 1024,
     }
 
     headers = {

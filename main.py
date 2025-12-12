@@ -152,13 +152,21 @@ if user_input:
     st.session_state.history.append({"role": "user", "text": user_input})
 
     # Intent classification
+
     try:
-        # TODO more than one query can be detected mesh akeed
-        intent = classify_with_deepseek(
+        # Allow classifier to return up to 3 intents (comma-separated or list)
+        intents = classify_with_deepseek(
             user_input, list(CYPHER_TEMPLATE_LIBRARY.keys())
         )
     except Exception as e:
-        intent = local_intent_classify(user_input)
+        intents = local_intent_classify(user_input)
+
+    # Normalize to list (support comma-separated string or single string)
+    if isinstance(intents, str):
+        intents = [i.strip() for i in intents.split(",") if i.strip()]
+    if not isinstance(intents, list):
+        intents = [intents]
+    intents = intents[:3]  # Limit to 3
 
     entities = preprocessing.extract_entities(user_input)
     print("\n\n####### Extracted entities: #######\n\n")
@@ -166,22 +174,33 @@ if user_input:
 
     # Retrieval
     if modules_missing:
-        retrieved_context = placeholder_retrieve(intent, entities, retrieval_mode, k=k)
+        # For placeholder, just show the first intent
+        retrieved_context = [
+            placeholder_retrieve(intent, entities, retrieval_mode, k=k)
+            for intent in intents
+        ]
     else:
         if retrieval_mode == "Baseline (Cypher)":
-            try:
-                retrieved_context = cypher_retriever.retrieve_data_via_cypher(
-                    intent, entities, limit=k
-                )
-                print("\n\n####### Cypher retrieval result: #######\n\n")
-                print(retrieved_context)
-            except Exception as e:
-                retrieved_context = {"error": str(e)}
-                print("\n\n####### Cypher retrieval error: #######\n\n")
-                print(retrieved_context)
-                if show_debug:
-                    st.write("Cypher retrieval error:")
-                    st.text(str(e))
+            retrieved_context = []
+            for intent in intents:
+                try:
+                    ctx = cypher_retriever.retrieve_data_via_cypher(
+                        intent, entities, limit=k
+                    )
+                    print(
+                        f"\n\n####### Cypher retrieval result for {intent}: #######\n\n"
+                    )
+                    print(ctx)
+                except Exception as e:
+                    ctx = {"intent": intent, "error": str(e)}
+                    print(
+                        f"\n\n####### Cypher retrieval error for {intent}: #######\n\n"
+                    )
+                    print(ctx)
+                    if show_debug:
+                        st.write(f"Cypher retrieval error for {intent}:")
+                        st.text(str(e))
+                retrieved_context.append(ctx)
         elif retrieval_mode == "Embeddings (Vector)":
             try:
                 retrieved_context = vector_retriever.vector_search(
@@ -197,16 +216,18 @@ if user_input:
                     st.write("Vector retrieval error:")
                     st.text(str(e))
         else:  # Hybrid
-            try:
-                c_res = cypher_retriever.retrieve_data_via_cypher(
-                    intent, entities, limit=k
-                )
-            except Exception as e:
-                c_res = {"error": str(e)}
-                if show_debug:
-                    st.write("Cypher retrieval error (hybrid):")
-                    st.text(str(e))
-
+            cypher_contexts = []
+            for intent in intents:
+                try:
+                    c_res = cypher_retriever.retrieve_data_via_cypher(
+                        intent, entities, limit=k
+                    )
+                except Exception as e:
+                    c_res = {"intent": intent, "error": str(e)}
+                    if show_debug:
+                        st.write(f"Cypher retrieval error (hybrid) for {intent}:")
+                        st.text(str(e))
+                cypher_contexts.append(c_res)
             try:
                 v_res = vector_retriever.vector_search(
                     entities, top_k=k, model_choice=embedding_model_choice
@@ -217,9 +238,10 @@ if user_input:
                     st.write("Vector retrieval error (hybrid):")
                     st.text(str(e))
 
-            retrieved_context = {"cypher": c_res, "vector": v_res}
+            retrieved_context = {"cypher": cypher_contexts, "vector": v_res}
 
     # LLM response
+
     if modules_missing:
         print("modules missing, using placeholder LLM answer.")
         answer = placeholder_llm_answer(user_input, retrieved_context, llm_model_choice)

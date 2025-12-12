@@ -9,3 +9,5 @@ embeddings_out/*
 scripts/config.txt
 
 old_template_library.py
+
+standby_library.py

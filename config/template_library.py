@@ -263,118 +263,6 @@ CYPHER_TEMPLATE_LIBRARY = {
     # -----------------------------------------------------
     # TEAM ANALYSIS & AGGREGATES
     # -----------------------------------------------------
-    # What is the average goals conceded per game for a team? STANDBY
-    "GET_TEAM_DEFENSE_STRENGTH": """
-       MATCH (t:Team {name: $team1})
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       WHERE (f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)
-       WITH f, t, max(r.goals_conceded) AS gc_per_fixture
-       RETURN t.name AS team, avg(gc_per_fixture) AS avg_goals_conceded_per_game
-       """,
-    # What is the average goals conceded per game for a team in a specific season? STANDBY
-    "GET_TEAM_DEFENSE_STRENGTH_SPECIFIC_SEASON": """
-       MATCH (t:Team {name: $team1})
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       MATCH (gw:Gameweek)-[:HAS_FIXTURE]->(f)
-       WHERE ((f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)) AND gw.season = $season
-       WITH t, f, max(r.goals_conceded) AS fixture_gc
-       RETURN t.name AS team, avg(fixture_gc) AS avg_goals_conceded_per_fixture
-       ORDER BY avg_goals_conceded_per_fixture ASC
-       LIMIT 1
-       """,
-    # What is the average goals scored per game for a team? STANDBY
-    "GET_TEAM_ATTACK_STRENGTH": """
-       MATCH (t:Team {name: $team1})
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       WHERE (f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)
-       WITH t, f, max(r.goals_scored) AS fixture_gs
-       RETURN t.name AS team, avg(fixture_gs) AS avg_goals_scored_per_fixture
-       ORDER BY avg_goals_scored_per_fixture DESC
-       LIMIT 1
-       """,
-    # What is the average goals scored per game for a team in a specific season? STANDBY
-    "GET_TEAM_ATTACK_STRENGTH_SPECIFIC_SEASON": """
-       MATCH (t:Team {name: $team1})
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       MATCH (gw:Gameweek)-[:HAS_FIXTURE]->(f)
-       WHERE ((f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)) AND gw.season = $season
-       WITH t, f, max(r.goals_scored) AS fixture_gs
-       RETURN t.name AS team, avg(fixture_gs) AS avg_goals_scored_per_fixture
-       ORDER BY avg_goals_scored_per_fixture DESC
-       LIMIT 1
-       """,
-    # What is the average goals conceded by a team at home vs away? STANDBY
-    "TEAM_AVG_GOALS_CONCEDED_HOME_AWAY": """
-       MATCH (t:Team {name:$team1})
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       WHERE (f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)
-       RETURN
-       avg(CASE WHEN (f)-[:HAS_HOME_TEAM]->(t) THEN r.goals_conceded END) AS home_gc,
-       avg(CASE WHEN (f)-[:HAS_AWAY_TEAM]->(t) THEN r.goals_conceded END) AS away_gc
-       """,
-    # Which teams have the most clean sheets? STANDBY
-    "LEADING_TEAMS_BY_CLEAN_SHEETS": """
-       MATCH (t:Team)
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       WHERE (f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)
-       WITH t, sum(r.clean_sheets) AS team_clean_sheets
-       RETURN t.name AS team, team_clean_sheets
-       ORDER BY team_clean_sheets DESC
-       LIMIT $limit
-       """,
-    # What is the total number of clean sheets for a team in a specific season? STANDBY
-    "TEAM_TOTAL_CLEAN_SHEETS_SPECIFIC_SEASON": """
-       MATCH (t:Team {name: $team1})
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       MATCH (gw:Gameweek)-[:HAS_FIXTURE]->(f)
-       WHERE ((f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)) AND gw.season = $season
-       RETURN t.name AS team, sum(r.clean_sheets) AS total_clean_sheets
-       """,
-    # What is the total number of clean sheets for a team in all seasons? STANDBY
-    "TEAM_TOTAL_CLEAN_SHEETS_ALL_SEASONS": """
-       MATCH (t:Team {name: $team1})
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       WHERE (f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)
-       RETURN t.name AS team, sum(r.clean_sheets) AS total_clean_sheets
-       """,
-    # What is the total number of goals scored for a team in a specific season? STANDBY
-    "TEAM_TOTAL_GOALS_SCORED_SPECIFIC_SEASON": """
-       MATCH (t:Team {name: $team1})
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       MATCH (gw:Gameweek)-[:HAS_FIXTURE]->(f)
-       WHERE ((f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)) AND gw.season = $season
-       RETURN t.name AS team, sum(r.goals_scored) AS total_goals_scored
-       """,
-    # What is the total number of goals scored for a team in all seasons? STANDBY
-    "TEAM_TOTAL_GOALS_SCORED_ALL_SEASONS": """
-       MATCH (t:Team {name: $team1})
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       WHERE (f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)
-       RETURN t.name AS team, sum(r.goals_scored) AS total_goals_scored
-       """,
-    # Which teams have the most goals scored? STANDBY
-    "LEADING_TEAMS_BY_GOALS_SCORED": """
-       MATCH (t:Team)
-       MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
-       WHERE (f)-[:HAS_HOME_TEAM]->(t) OR (f)-[:HAS_AWAY_TEAM]->(t)
-       WITH t, sum(r.goals_scored) AS team_goals_scored
-       RETURN t.name AS team, team_goals_scored
-       ORDER BY team_goals_scored DESC
-       LIMIT $limit
-       """,
-    # Get fixtures between two teams? STANDBY
-    "GET_FIXTURES_BETWEEN_TEAMS": """
-       MATCH (f:Fixture)
-       MATCH (t1:Team {name: $team1})
-       MATCH (t2:Team {name: $team2})
-       WHERE
-              ((f)-[:HAS_HOME_TEAM]->(t1) AND (f)-[:HAS_AWAY_TEAM]->(t2)) OR
-              ((f)-[:HAS_HOME_TEAM]->(t2) AND (f)-[:HAS_AWAY_TEAM]->(t1))
-       RETURN f.kickoff_time AS kickoff,
-              t1.name AS team1,
-              t2.name AS team2
-       ORDER BY f.kickoff_time ASC
-       """,
     # How many points has a player scored against a specific team? tested
     "PLAYER_POINTS_VS_SPECIFIC_TEAM": """
        MATCH (p:Player {player_name: $player1})-[r:PLAYED_IN]->(f:Fixture)
@@ -417,15 +305,6 @@ CYPHER_TEMPLATE_LIBRARY = {
        MATCH (gw:Gameweek)-[:HAS_FIXTURE]->(f)
          WHERE r.minutes > 0
        RETURN count(r) AS appearances_in_season
-       """,
-    # What are a player's points at home vs away? STANDBY
-    "PLAYER_POINTS_HOME_VS_AWAY": """
-       MATCH (p:Player {player_name: $player1})-[r:PLAYED_IN]->(f:Fixture)
-       OPTIONAL MATCH (f)-[:HAS_HOME_TEAM]->(home)
-       OPTIONAL MATCH (f)-[:HAS_AWAY_TEAM]->(away)
-       RETURN
-       sum(CASE WHEN home IS NOT NULL THEN r.total_points END) AS home_points,
-       sum(CASE WHEN away IS NOT NULL THEN r.total_points END) AS away_points
        """,
     # Against which teams has a player scored the most points? tested
     "PLAYER_BEST_PERFORMANCE_AGAINST_WHICH_OPPONENTS": """
@@ -513,18 +392,6 @@ required_params_map = {
     "PLAYER_TOTAL_CARDS_SPECIFIC_SEASON": ["player1", "season"],
     "PLAYER_GOAL_CONTRIBUTIONS_SPECIFIC_SEASON": ["player1", "season"],
     # TEAM ANALYSIS & AGGREGATES
-    "GET_TEAM_DEFENSE_STRENGTH": ["team1"],
-    "GET_TEAM_DEFENSE_STRENGTH_SPECIFIC_SEASON": ["team1", "season"],
-    "GET_TEAM_ATTACK_STRENGTH": ["team1"],
-    "GET_TEAM_ATTACK_STRENGTH_SPECIFIC_SEASON": ["team1", "season"],
-    "TEAM_AVG_GOALS_CONCEDED_HOME_AWAY": ["team1"],
-    "LEADING_TEAMS_BY_CLEAN_SHEETS": ["limit"],
-    "TEAM_TOTAL_CLEAN_SHEETS_SPECIFIC_SEASON": ["team1", "season"],
-    "TEAM_TOTAL_CLEAN_SHEETS_ALL_SEASONS": ["team1"],
-    "TEAM_TOTAL_GOALS_SCORED_SPECIFIC_SEASON": ["team1", "season"],
-    "TEAM_TOTAL_GOALS_SCORED_ALL_SEASONS": ["team1"],
-    "LEADING_TEAMS_BY_GOALS_SCORED": ["limit"],
-    "GET_FIXTURES_BETWEEN_TEAMS": ["team1", "team2"],
     "PLAYER_POINTS_VS_SPECIFIC_TEAM": ["player1", "team1"],
     # PLAYER VALUE & RECENT PERFORMANCE
     "PLAYER_LAST_N_FIXTURES_PERFORMANCE": ["player1", "limit"],
@@ -532,7 +399,6 @@ required_params_map = {
     "PLAYER_MAX_SPECIFIC_STAT_SINGLE_MATCH": ["player1", "stat_property"],
     "PLAYER_FIXTURE_COUNT_SPECIFIC_SEASON": ["player1", "season"],
     "PLAYER_FIXTURE_COUNT_TOTAL": ["player1"],
-    "PLAYER_POINTS_HOME_VS_AWAY": ["player1"],
     "PLAYER_BEST_PERFORMANCE_AGAINST_WHICH_OPPONENTS": ["player1", "limit"],
     "PLAYER_WORST_PERFORMANCE_AGAINST_WHICH_OPPONENTS": ["player1", "limit"],
     "POSITION_BEST_AVG_POINTS": [],
@@ -544,16 +410,16 @@ required_params_map = {
 def local_intent_classify(text: str) -> str:
     """Very small keyword-based fallback intent classifier."""
     t = text.lower()
-    if any(w in t for w in ["captain", "recommend", "suggest", "transfer", "under"]):
-        print("Transfer rec detected")
-        return "TRANSFER_REC"
+    if any(w in t for w in ["captain", "recommend", "suggest", "transfer"]):
+        print("Captain rec intent detected")
+        return "PLAYER_POINTS_PER_MINUTE_SPECIFIC_SEASON"
     if any(w in t for w in ["compare", "better", "vs", "vs."]):
-        print("Compare intent detected")
-        return "COMPARE"
+        print("COMPARE_PLAYERS_BY_TOTAL_POINTS")
+        return "Compare players intent detected"
     if any(w in t for w in ["fixture", "playing", "next", "opponent"]):
-        print("Team fixture intent detected")
-        return "TEAM_FIXTURE"
+        print("Player opponent intent detected")
+        return "PLAYER_BEST_PERFORMANCE_AGAINST_WHICH_OPPONENTS"
     if any(w in t for w in ["points", "how many", "goals", "assists", "stats"]):
-        print("Player stats intent detected")
-        return "PLAYER_STATS"
-    return "GENERAL"
+        print("Player career stats intent detected")
+        return "PLAYER_CAREER_STATS_TOTALS"
+    return "PLAYER_CAREER_STATS_TOTALS"
