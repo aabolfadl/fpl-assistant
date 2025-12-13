@@ -32,11 +32,11 @@ from modules.llm_engine import (
 
 # Import Neo4jGraph for direct Cypher execution
 from modules.db_manager import neo4j_graph
-from modules.graph_visualizer import visualize_subgraph
+from modules.graph_visualizer import generate_html_visualization
 from config.styles import STYLE
 
 
-st.set_page_config(page_title="FPL Assistant", layout="wide")
+st.set_page_config(page_title="FPL Assistant", layout="wide", page_icon="logo2.png")
 
 st.markdown(
     STYLE,
@@ -82,11 +82,19 @@ with st.sidebar:
         "Top-K results (for retrieval)", min_value=1, max_value=20, value=5
     )
 
-    show_debug = st.checkbox("Show debug info", value=False)
-
 # Chat history in session state
 if "history" not in st.session_state:
     st.session_state.history = []
+
+# Add these:
+if "last_intents" not in st.session_state:
+    st.session_state.last_intents = []
+if "last_entities" not in st.session_state:
+    st.session_state.last_entities = {}
+if "last_graph_html" not in st.session_state:
+    st.session_state.last_graph_html = None
+if "last_retrieval_mode" not in st.session_state:
+    st.session_state.last_retrieval_mode = None
 
 # Input box
 user_input = st.chat_input("Ask about FPL — e.g. 'Who should I captain for GW10?'")
@@ -177,9 +185,13 @@ if user_input:
         intents = [intents]
     intents = intents[:3]  # Limit to 3
 
+    st.session_state.last_intents = intents
+
     entities = preprocessing.extract_entities(user_input)
     print("\n\n####### Extracted entities: #######\n\n")
     print(entities)
+
+    st.session_state.last_entities = entities
 
     # Retrieval
     if modules_missing:
@@ -188,7 +200,10 @@ if user_input:
             placeholder_retrieve(intent, entities, retrieval_mode, k=k)
             for intent in intents
         ]
+        st.session_state.last_graph_html = None
     else:
+        graph_html_content = None
+
         if retrieval_mode == "Baseline (Cypher)":
             # ...existing code...
             cypher_results = []
@@ -200,19 +215,31 @@ if user_input:
                     print(
                         f"\n\n####### Cypher retrieval result for {intent}: #######\n\n"
                     )
-                    print(ctx)
+                    # print(ctx)
+
+                    # Capture graph visualization data if available
+                    if (
+                        not graph_html_content
+                        and ctx.get("graph_nodes")
+                        and ctx.get("graph_edges")
+                    ):
+                        graph_html_content = generate_html_visualization(
+                            ctx.get("graph_nodes", []),
+                            ctx.get("graph_edges", []),
+                            height=600,
+                        )
                 except Exception as e:
                     ctx = {"intent": intent, "error": str(e)}
                     print(
                         f"\n\n####### Cypher retrieval error for {intent}: #######\n\n"
                     )
-                    print(ctx)
-                    if show_debug:
-                        st.write(f"Cypher retrieval error for {intent}:")
-                        st.text(str(e))
+                    # print(ctx)
                 cypher_results.append(ctx)
             # Filter out entries with an 'error' field
             retrieved_context = [res for res in cypher_results if not res.get("error")]
+            st.session_state.last_graph_html = graph_html_content
+            st.session_state.last_retrieval_mode = "Baseline (Cypher)"
+
         elif retrieval_mode == "Embeddings (Vector)":
             # ...existing code...
             try:
@@ -225,22 +252,37 @@ if user_input:
                 retrieved_context = {"error": str(e)}
                 print("\n\n####### Vector retrieval error: #######\n\n")
                 print(retrieved_context)
-                if show_debug:
-                    st.write("Vector retrieval error:")
-                    st.text(str(e))
+            st.session_state.last_graph_html = None
+            st.session_state.last_retrieval_mode = "Embeddings (Vector)"
+
         elif retrieval_mode == "Hybrid":
-            # ...existing code...
             cypher_contexts = []
             for intent in intents:
                 try:
                     c_res = cypher_retriever.retrieve_data_via_cypher(
                         intent, entities, limit=k
                     )
+                    print(
+                        f"\n\n####### Cypher retrieval result for {intent}: #######\n\n"
+                    )
+                    print(c_res)
+                    # Capture graph visualization from hybrid cypher component
+                    if (
+                        not graph_html_content
+                        and c_res.get("graph_nodes")
+                        and c_res.get("graph_edges")
+                    ):
+                        graph_html_content = generate_html_visualization(
+                            c_res.get("graph_nodes", []),
+                            c_res.get("graph_edges", []),
+                            height=600,
+                        )
                 except Exception as e:
                     c_res = {"intent": intent, "error": str(e)}
-                    if show_debug:
-                        st.write(f"Cypher retrieval error (hybrid) for {intent}:")
-                        st.text(str(e))
+                    print(
+                        f"\n\n####### Cypher retrieval error for {intent}: #######\n\n"
+                    )
+                    print(c_res)
                 cypher_contexts.append(c_res)
             # Filter out cypher entries with an 'error' field
             filtered_cypher_contexts = [
@@ -252,11 +294,11 @@ if user_input:
                 )
             except Exception as e:
                 v_res = {"error": str(e)}
-                if show_debug:
-                    st.write("Vector retrieval error (hybrid):")
-                    st.text(str(e))
 
             retrieved_context = {"cypher": filtered_cypher_contexts, "vector": v_res}
+            st.session_state.last_graph_html = graph_html_content
+            st.session_state.last_retrieval_mode = "Hybrid"
+
         elif retrieval_mode == "LLM-generated Cypher":
             # New mode: Use LLM to generate Cypher, then execute it
             try:
@@ -264,9 +306,25 @@ if user_input:
                 print("\n\n####### LLM-generated Cypher query: #######\n\n")
                 print(cypher_query)
                 # Optionally show the query in debug panel
-                cypher_results = neo4j_graph.execute_query(cypher_query)
+                query_result = neo4j_graph.execute_query_with_graph(cypher_query)
+                cypher_results = query_result.get("results", [])
+                neo4j_nodes = query_result.get("nodes", [])
+                neo4j_edges = query_result.get("edges", [])
+
                 print("\n\n####### LLM Cypher execution result: #######\n\n")
                 print(cypher_results)
+
+                # Generate graph visualization
+                if neo4j_nodes or neo4j_edges:
+                    from modules.graph_visualizer import neo4j_to_visjs_graph
+
+                    vis_nodes, vis_edges = neo4j_to_visjs_graph(
+                        neo4j_nodes, neo4j_edges
+                    )
+                    graph_html_content = generate_html_visualization(
+                        vis_nodes, vis_edges, height=600
+                    )
+
                 retrieved_context = {
                     "cypher_query": cypher_query,
                     "results": cypher_results,
@@ -275,9 +333,8 @@ if user_input:
                 retrieved_context = {"error": str(e)}
                 print("\n\n####### LLM Cypher retrieval error: #######\n\n")
                 print(retrieved_context)
-                if show_debug:
-                    st.write("LLM Cypher retrieval error:")
-                    st.text(str(e))
+            st.session_state.last_graph_html = graph_html_content
+            st.session_state.last_retrieval_mode = "LLM-generated Cypher"
 
     # LLM response
 
@@ -294,9 +351,6 @@ if user_input:
                 )
                 print("\n\n####### LLM engine error: #######\n\n")
                 print(str(e))
-                if show_debug:
-                    st.write("LLM engine error:")
-                    st.text(str(e))
         elif llm_model_choice == "B":
             try:
                 answer = llama_generate_answer(user_input, retrieved_context)
@@ -306,9 +360,6 @@ if user_input:
                 )
                 print("\n\n####### LLM engine error: #######\n\n")
                 print(str(e))
-                if show_debug:
-                    st.write("LLM engine error:")
-                    st.text(str(e))
         else:  # Gemma (C)
             try:
                 answer = gemma_generate_answer(user_input, retrieved_context)
@@ -318,96 +369,82 @@ if user_input:
                 )
                 print("\n\n####### LLM engine error: #######\n\n")
                 print(str(e))
-                if show_debug:
-                    st.write("LLM engine error:")
-                    st.text(str(e))
 
     # Append assistant reply
     st.session_state.history.append({"role": "assistant", "text": answer})
 
 # Display chat history
-if show_debug:
-    chat_col, debug_col = st.columns([3, 1])
-else:
-    # Create a single column for the chat when debug panel is hidden.
-    chat_col = st.columns([1])[0]
-    debug_col = None
-with chat_col:
+with st.container():
     for msg in st.session_state.history:
         if msg["role"] == "user":
             st.chat_message("user").write(msg["text"])
         else:
             st.chat_message("assistant").write(msg["text"])
 
-# Debug / transparency panel
-if show_debug:
-    with debug_col:
-        st.header("Debug / Transparency")
-        st.subheader("Cypher templates (sample)")
+# Display graph visualization if available
+if st.session_state.last_graph_html:
+    st.markdown("---")
+    with st.expander("Graph Visualization"):
+        st.markdown(f"*Retrieved via {st.session_state.last_retrieval_mode}*")
+        st.components.v1.html(
+            st.session_state.last_graph_html, height=650, scrolling=False
+        )
+        st.markdown("---")
+        st.markdown(
+            """
+            **Graph Visualization Tips:**
+            - Hover over nodes to see full details
+            - Drag nodes to rearrange
+            - Scroll to zoom in/out
+            - Use navigation buttons (top left) to interact with the graph
+            """
+        )
+
+
+if user_input:
+    # Under-the-hood expander showing raw context returned
+    with st.expander("Raw retrieval context"):
+        # Show the last retrieved context if available
+        if "retrieved_context" in locals():
+            st.json(retrieved_context)
+        else:
+            st.write("No retrieval performed yet.")
+
+    with st.expander("Debug & Transparency"):
+        st.subheader("Intents")
         st.code(
-            CYPHER_TEMPLATE_LIBRARY.get("PLAYER_RECENT_STATS", "--missing--"),
+            (
+                "\n".join(st.session_state.last_intents)
+                if st.session_state.last_intents
+                else "No intents yet"
+            ),
+            language="text",
+        )
+
+        st.subheader("Cypher Queries")
+        st.code(
+            (
+                "\n".join(
+                    CYPHER_TEMPLATE_LIBRARY.get(intent, "--missing--")
+                    for intent in st.session_state.last_intents
+                )
+                if st.session_state.last_intents
+                else "No queries yet"
+            ),
             language="cypher",
         )
 
-        st.subheader("Last Query / Entities")
-        last_entities = (
+        st.subheader("Last Query")
+        query = (
             st.session_state.history[-2]["text"]
             if len(st.session_state.history) >= 2
             else ""
         )
-        st.write(last_entities)
+        st.write(query if query else "No queries yet")
 
-        if modules_missing:
-            st.error("Project modules (modules/*) not importable.")
-            st.write("Import error summary:")
-            st.text(str(_import_error))
-            st.write(
-                "Implement `modules/preprocessing.py`, `modules/cypher_retriever.py`, and"
-                "`modules/vector_retriever.py` to enable full functionality."
-            )
-
-
-# Graph visualization when debug is ON
-if show_debug and "retrieved_context" in locals():
-    st.subheader("Graph Visualization")
-
-    # Baseline mode 
-    if isinstance(retrieved_context, list):
-        for i, ctx in enumerate(retrieved_context):
-            st.markdown(f"### Graph {i+1}: `{ctx.get('intent', '')}`")
-
-            nodes = ctx.get("nodes", [])
-            rels = ctx.get("relationships", [])
-
-            if nodes or rels:
-                visualize_subgraph({
-                    "nodes": nodes,
-                    "relationships": rels
-                })
-            else:
-                st.info("No graph for this intent.")
-
-    # Hybrid mode
-    elif isinstance(retrieved_context, dict) and "cypher" in retrieved_context:
-        for i, ctx in enumerate(retrieved_context["cypher"]):
-            st.markdown(f"### Graph {i+1}: `{ctx.get('intent', '')}`")
-
-            nodes = ctx.get("nodes", [])
-            rels = ctx.get("relationships", [])
-
-            if nodes or rels:
-                visualize_subgraph({
-                    "nodes": nodes,
-                    "relationships": rels
-                })
-            else:
-                st.info("No graph for this intent.")
-
-
-# Under-the-hood expander showing raw context returned
-with st.expander("Raw retrieval context"):
-    # Show the last retrieved context if available
-    if "retrieved_context" in locals():
-        st.json(retrieved_context)
-    else:
-        st.write("No retrieval performed yet.")
+        st.subheader("Last Entities")
+        st.write(
+            st.session_state.last_entities
+            if st.session_state.last_entities
+            else "No entities yet"
+        )

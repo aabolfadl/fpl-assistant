@@ -11,14 +11,15 @@ It selects Cypher templates based on:
 - Intent query (already classified using LLM or local rules)
 - Entities extracted by preprocessing (player names, teams, GW, etc.)
 
-It returns JSON-friendly results for use by the LLM.
+It returns JSON-friendly results for use by the LLM, along with graph
+visualization data when graph-based retrieval is used.
 
 """
 
 from typing import Dict, Any
 from modules.db_manager import Neo4jGraph
+from modules.graph_visualizer import neo4j_to_visjs_graph
 from config.template_library import CYPHER_TEMPLATE_LIBRARY, required_params_map
-from modules.graph_builder import build_graph
 
 # Neo4j connection singleton
 db = Neo4jGraph()
@@ -62,8 +63,8 @@ def retrieve_data_via_cypher(intent: str, entities: Dict[str, Any], limit: int =
         limit (int): Limit count for query results
 
     Returns:
-        dict: Results + metadata (safe for LLM)
-        Graph-shaped data (nodes + relationships)
+        dict: Results + metadata + graph visualization data (safe for LLM)
+              Includes 'graph_nodes' and 'graph_edges' for visualization
     """
 
     # Pick the template for this intent
@@ -113,9 +114,9 @@ def retrieve_data_via_cypher(intent: str, entities: Dict[str, Any], limit: int =
             "cypher_query": cypher,
             "parameters": params,
             "results": [],
-            "nodes": [],
-            "relationships": [],
             "error": f"Missing required parameters for template: {missing}",
+            "graph_nodes": [],
+            "graph_edges": [],
         }
 
     cypher = render_cypher_template(CYPHER_TEMPLATE_LIBRARY[intent], params)
@@ -125,12 +126,20 @@ def retrieve_data_via_cypher(intent: str, entities: Dict[str, Any], limit: int =
     params.pop("limit", None)
     params.pop("budget", None)
 
-    raw_results = db.execute_query(cypher, params)
+    # Execute query with graph extraction
+    try:
+        query_result = db.execute_query_with_graph(cypher, params)
+        raw_results = query_result.get("results", [])
+        neo4j_nodes = query_result.get("nodes", [])
+        neo4j_edges = query_result.get("edges", [])
+    except Exception as e:
+        # If execute_query_with_graph fails, fall back to regular execution
+        raw_results = db.execute_query(cypher, params)
+        neo4j_nodes = []
+        neo4j_edges = []
 
-
-    # graph builder 
-    
-    graph_nodes, rels = build_graph(intent, params, raw_results)
+    # Convert Neo4j nodes/edges to vis.js format
+    vis_nodes, vis_edges = neo4j_to_visjs_graph(neo4j_nodes, neo4j_edges)
 
     return {
         "intent": intent,
@@ -138,6 +147,6 @@ def retrieve_data_via_cypher(intent: str, entities: Dict[str, Any], limit: int =
         "cypher_query": cypher,
         "parameters": params,
         "results": raw_results,
-        "nodes": graph_nodes,
-        "relationships": rels,
+        "graph_nodes": vis_nodes,
+        "graph_edges": vis_edges,
     }
