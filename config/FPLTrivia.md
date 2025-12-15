@@ -43,5 +43,3 @@
 - Which player played the most minutes?
 
 ---
-
-Feel free to ask about any player, team, stat, or FPL scenario!

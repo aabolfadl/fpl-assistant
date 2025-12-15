@@ -23,19 +23,18 @@
 
 ## 🎯 Overview
 
-**FPL Assistant** is an intelligent conversational system that answers Fantasy Premier League questions using a **hybrid retrieval-augmented generation (RAG)** approach. Instead of hallucinating answers, the system:
+**FPL Assistant** is an intelligent conversational system that answers Fantasy Premier League questions using a **retrieval-augmented generation (RAG)** approach. Instead of hallucinating answers, the system:
 
-1. **Classifies intent** — understands what the user is asking (e.g., player stats, comparisons, recommendations)
+1. **Classifies intent** — understands what the user is asking (e.g., player stats, comparisons)
 2. **Extracts entities** — identifies relevant players, teams, gameweeks, and statistics from the query
 3. **Retrieves context** — uses multiple retrieval strategies (deterministic Cypher queries, semantic vector search, or hybrid) to fetch facts from a Neo4j knowledge graph
 4. **Generates answers** — passes retrieved context to a language model (DeepSeek, Llama, or Gemma) to synthesize natural, conversational responses
 
 The system supports queries like:
 
-- _"Who should I captain for gameweek 10?"_
-- _"Compare Haaland and Son's assists per game"_
-- _"What are the top forwards under £6.5M?"_
-- _"Who are the most creative midfielders in the 2022-23 season?"_
+- _"Compare Salah and Haaland's total points"_
+- _"How many goals did Salah score against Wolves?"_
+- _"Which team did Salah score the least against in the 2022-23 season?"_
 
 ### Why This Approach?
 
@@ -64,32 +63,31 @@ Traditional LLMs on FPL data are prone to hallucination (making up stats). RAG s
 User Query
     ↓
 ┌─────────────────────────────────────────────────┐
-│  PREPROCESSING & UNDERSTANDING                 │
-│  • Intent Classification (LLM or Rule-based)   │
-│  • Entity Extraction (NER + Fuzzy Matching)    │
+│  PREPROCESSING & UNDERSTANDING                  │
+│  • Intent Classification (LLM or Rule-based)    │
+│  • Entity Extraction (NER + Fuzzy Matching)     │
 └─────────────────────────────────────────────────┘
     ↓
 ┌─────────────────────────────────────────────────┐
-│  RETRIEVAL LAYER (Multi-Strategy)              │
-│  ┌─────────────────┐  ┌──────────────────┐     │
-│  │ Cypher Baseline │  │ Vector Embeddings│     │
-│  │  (Deterministic)│  │  (Semantic)      │     │
-│  └────────┬────────┘  └────────┬─────────┘     │
+│  RETRIEVAL LAYER (Multi-Strategy)               │
+│  ┌─────────────────┐  ┌──────────────────┐      │
+│  │ Cypher Baseline │  │ Vector Embeddings│      │
+│  │  (Deterministic)│  │  (Semantic)      │      │
+│  └────────┬────────┘  └────────┬─────────┘      │
 │           └──────┬──────────────┘               │
 │                  ↓                              │
-│          Neo4j Knowledge Graph                 │
-│    (2 seasons × 38 gameweeks × 20 teams)      │
+│          Neo4j Knowledge Graph                  │
 └─────────────────────────────────────────────────┘
     ↓
 ┌─────────────────────────────────────────────────┐
-│  CONTEXT ASSEMBLY                              │
+│  CONTEXT ASSEMBLY                               │
 │  • Combine & deduplicate results                │
 │  • Format for LLM consumption                   │
 └─────────────────────────────────────────────────┘
     ↓
 ┌─────────────────────────────────────────────────┐
-│  LLM ANSWER GENERATION                         │
-│  • DeepSeek / Llama / Gemma                    │
+│  LLM ANSWER GENERATION                          │
+│  • DeepSeek / Llama / Gemma                     │
 │  • Grounded in retrieved facts                  │
 │  • Suggest follow-up questions                  │
 └─────────────────────────────────────────────────┘
@@ -103,7 +101,7 @@ Natural, Factual Answer
 
 ### Prerequisites
 
-- **Python 3.9+**
+- **Python 3.12**
 - **Neo4j** (Desktop or Docker)
 - **4 GB+ RAM** (for embedding models + FAISS indexes)
 - **Internet connection** (for LLM API calls)
@@ -134,6 +132,8 @@ DEEPSEEK_API_KEY=<your_deepseek_key>
 DEEPSEEK_API_URL=https://api.deepseek.com/chat/completions
 DEEPSEEK_MODEL=deepseek-chat
 
+HF_TOKEN=<your_huggingface_token>
+
 # Embedding Models
 MODEL_A_NAME=sentence-transformers/all-MiniLM-L6-v2
 MODEL_B_NAME=sentence-transformers/all-mpnet-base-v2
@@ -148,9 +148,7 @@ MAPPING_B_PATH=./embeddings_out/idx_to_embedding_id_modelB.json
 OUTPUT_DIR=./embeddings_out
 ```
 
-### Step 3: Populate Neo4j Knowledge Graph
-
-#### Option A: Using Provided Data (Recommended)
+### Step 3: Populate Neo4j Knowledge Graph using `fpl_two_seasons.csv`
 
 ```powershell
 # Start Neo4j Desktop and create/launch a local database
@@ -192,7 +190,7 @@ python .\scripts\generate_embeddings.py
 This script:
 
 1. Fetches all player performance records from Neo4j
-2. Generates text descriptions (e.g., "Haaland (FWD): 13 goals, 5 assists, 195 points")
+2. Generates text descriptions (e.g., "Haaland: 13 goals | assists: 1 | total_points: 10 | Position: FWD")
 3. Encodes them using both embedding models
 4. Creates FAISS indexes for fast similarity search
 
@@ -220,11 +218,11 @@ fpl-assistant/
 │
 ├── config/                           # Configuration & lookup tables
 │   ├── settings.py                   # Model options, defaults
-│   ├── template_library.py           # 20+ Cypher query templates
+│   ├── template_library.py           # 35 Cypher query templates
 │   ├── team_name_variants.py         # Team abbreviation → full name
 │   ├── stat_variants.py              # Statistic name aliases
 │   ├── styles.py                     # Streamlit CSS styling
-│   └── FPLTrivia.md                  # Fun FPL facts
+│   └── FPLTrivia.md                  # Possible user queries
 │
 ├── modules/                          # Core application logic
 │   ├── preprocessing.py              # Intent classification + entity extraction
@@ -232,14 +230,14 @@ fpl-assistant/
 │   ├── vector_retriever.py           # Semantic retrieval via embeddings
 │   ├── db_manager.py                 # Neo4j connection pool
 │   ├── llm_engine.py                 # LLM API calls (DeepSeek, Llama, Gemma)
-│   ├── llm_helper.py                 # Intent classification with LLM
-│   └── tests_llm_engine.py           # LLM testing utilities
+│   ├── llm_helper.py                 # Intent classification & Cypher Generator with LLM
+│   └── tests_llm_engine.py           # `llm_engine.py` customized for performance testing
 │
 ├── scripts/                          # Data processing & setup
 │   ├── create_kg.py                  # Populate Neo4j from CSV
 │   ├── generate_embeddings.py        # Create FAISS indexes
 │   ├── fpl_two_seasons.csv           # Raw FPL data (2 seasons)
-│   └── config.txt                    # Script configuration
+│   └── config.txt                    # Neo4j connection configuration
 │
 ├── embeddings_out/                   # Pre-computed embeddings
 │   ├── faiss_index_modelA.index      # Fast index for model A
@@ -252,8 +250,8 @@ fpl-assistant/
 │   ├── tests.json                    # 30 test prompts
 │   ├── results.json                  # Experimental results (540 trials)
 │   ├── validate_tests.json           # Ground truth answers
-│   ├── cost_modify.py                # Analyze token costs
-│   ├── viz.py                        # Visualize results
+│   ├── cost_modify.py                # Calculate LLM costs
+│   ├── viz.py                        # Visualize results using plots
 │   └── plots/                        # Generated charts
 │
 └── logo.png                          # App logo
@@ -372,12 +370,14 @@ Suggest a follow-up question at the end.
 
 ### 6. **llm_helper.py** — Intent Classification & Prompt Engineering
 
-High-level LLM utilities for understanding user intent.
+- High-level LLM utilities for understanding user intent.
+- Generating cypher queries.
 
 **Functions:**
 
 - `classify_with_deepseek(query, options) → list` — Map query to up to 3 Cypher templates
 - Fallback: `local_intent_classify(query)` (rule-based, in `config/template_library.py`)
+- `create_query_with_deepseek(query: str, schema) -> cypher query` - Generate a consistent query for user's query with respect to KG schema.
 
 ---
 
@@ -387,10 +387,10 @@ High-level LLM utilities for understanding user intent.
 
 | Node          | Properties                                 | Purpose                                  |
 | ------------- | ------------------------------------------ | ---------------------------------------- |
-| **Season**    | `season_name`                              | Group data by season (2021-22, 2022-23)  |
+| **Season**    | `season_name`                              | Either 2021-22 or 2022-23                |
 | **Gameweek**  | `season`, `GW_number`                      | 38 gameweeks per season                  |
 | **Fixture**   | `season`, `fixture_number`, `kickoff_time` | Individual matches                       |
-| **Team**      | `name`                                     | 20 Premier League clubs                  |
+| **Team**      | `name`                                     | 20 Premier League clubs per season       |
 | **Player**    | `player_name`, `player_element`            | Individual players                       |
 | **Position**  | `name`                                     | FWD, MID, DEF, GK                        |
 | **Embedding** | `model`, `text`, `source_label`            | Vector embeddings of player descriptions |
@@ -398,18 +398,12 @@ High-level LLM utilities for understanding user intent.
 ### Relationships
 
 ```
-(Season) -[:HAS_GW]-> (Gameweek)
-         ↓
-(Gameweek) -[:HAS_FIXTURE]-> (Fixture)
-                                ↓
-                      ┌─────────┼─────────┐
-                      ↓         ↓         ↓
-               (Team) (Player) (Fixture properties)
-         ↓
-(Player) -[:PLAYS_AS]-> (Position)
-(Player) -[:PLAYED_IN]-> (Fixture)  [with performance data]
-
-(Embedding) -[:HAS_EMBEDDING]-> (Player or Team)
+- (Season) - [:HAS_GW]-> (Gameweek)
+- (Gameweek) - [:HAS_FIXTURE]-> (Fixture)
+- (Fixture) - [:HAS_HOME_TEAM]-> (Team)
+- (Fixture) - [:HAS_AWAY_TEAM]-> (Team)
+- (Player) - [:PLAYS_AS]-> (Position)
+- (Player) - [:PLAYED_IN]-> (Fixture)
 ```
 
 ### Performance Stats on `PLAYED_IN` Relationships
@@ -453,7 +447,7 @@ The system supports **four retrieval strategies**, configurable from the UI side
 4. Return ranked results
 
 **Pros:** Robust to phrasing differences, discovers similar items  
-**Cons:** Less precise; slower than Cypher
+**Cons:** Less precise; slower than Cypher; not practically useful for the FPL Knowledge Graph
 
 ### 3. **Hybrid** — Best of Both Worlds
 
@@ -479,50 +473,17 @@ The system supports **four retrieval strategies**, configurable from the UI side
 3. Return results
 
 **Pros:** Flexibility for novel queries  
-**Cons:** Can generate invalid Cypher; slower
+**Cons:** Can generate invalid Cypher; slower; major cybersecurity threat
 
 ---
 
-## 🤖 LLM Integration
-
-### Supported Models
+## 🤖 LLM Comparison
 
 | Model           | Provider     | Speed   | Quality    | Cost     |
 | --------------- | ------------ | ------- | ---------- | -------- |
 | **DeepSeek**    | Deepseek API | ⚡ Fast | ⭐⭐⭐⭐   | 💰 Cheap |
 | **Llama 2 70B** | Hugging Face | 🐢 Slow | ⭐⭐⭐⭐⭐ | 💰💰     |
 | **Gemma 7B**    | Hugging Face | ⚡ Fast | ⭐⭐⭐     | 💰 Cheap |
-
-### Configuration
-
-Select LLM and embedding model from **Streamlit sidebar**:
-
-```
-🎛️ Configuration
-├─ Choose LLM: [DeepSeek ▼]
-├─ Retrieval Mode: (Baseline (Cypher) ◯ Embeddings ◯ Hybrid)
-├─ Embedding Model: [all-MiniLM-L6-v2 ▼]
-├─ Top-K: [5]
-└─ Show debug info [☐]
-```
-
-### Example API Call
-
-```python
-from modules.llm_engine import deepseek_generate_answer
-
-context_data = {
-    "intent": "PLAYER_STATS_GW_SEASON",
-    "results": [
-        {"player": "Erling Haaland", "goals": 5, "assists": 2, "total_points": 35}
-    ]
-}
-
-answer = deepseek_generate_answer(
-    "How did Haaland perform in GW5?",
-    context_data
-)
-```
 
 ---
 
@@ -563,108 +524,35 @@ python -m experiments.run_experiments
 ### Streamlit Interface
 
 ```
-┌─────────────────────────────────────────────────┐
-│  FPL Graph-RAG Assistant                        │
-│  Ask questions about Fantasy Premier League    │
-├──────────────────┬──────────────────────────────┤
-│  SIDEBAR         │  MAIN CONTENT                │
-│  ├─ LLM Choice   │  • Chat input                │
-│  ├─ Retrieval    │  • Message history           │
-│  ├─ Top-K        │  • Context display (debug)   │
-│  ├─ Debug Toggle │  • Answer + follow-ups       │
-│  └─ Logo         │                              │
-└──────────────────┴──────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│  FPL Graph-RAG Assistant                           │
+│  Ask questions about Fantasy Premier League        │
+├─────────────────────┬──────────────────────────────┤
+│  SIDEBAR            │  MAIN CONTENT                │
+│  ├─ LLM Choice      │  • Chat input                │
+│  ├─ Retrieval       │  • Answer                    │
+│  ├─ Embedding model │  • Graph visualization       │
+│  ├─ Top-K           │  • Raw retrieval context     │
+│  └─ PL Logo         │  • Debug & Transparency      │
+│                     │  • Chat history              │
+└─────────────────────┴──────────────────────────────┘
 ```
 
 ### Color Palette (Official PL Colors)
 
-| Color  | RGB                  | Use                 |
-| ------ | -------------------- | ------------------- |
-| Cyan   | `rgb(4, 245, 255)`   | Highlights, accents |
-| Pink   | `rgb(233, 0, 82)`    | Warnings, important |
-| Green  | `rgb(0, 255, 133)`   | Success, positive   |
-| Purple | `rgb(56, 0, 60)`     | Background, muted   |
-| White  | `rgb(255, 255, 255)` | Text, primary       |
-
----
-
-## 🐛 Troubleshooting
-
-### Issue: "Neo4j connection failed"
-
-**Cause:** Neo4j database not running or incorrect credentials
-
-**Solution:**
-
-```powershell
-# 1. Start Neo4j Desktop
-# 2. Verify .env has correct credentials
-# 3. Test connection:
-python -c "from modules.db_manager import neo4j_graph; print('OK')"
-```
-
-### Issue: "Missing FAISS index files"
-
-**Cause:** `embeddings_out/` directory is empty
-
-**Solution:**
-
-```powershell
-# Option 1: Download from Drive (fast)
-# Place files in embeddings_out/
-
-# Option 2: Generate from scratch (slow)
-python scripts/generate_embeddings.py
-```
-
-### Issue: "spaCy model not found"
-
-**Cause:** Transformer model not downloaded
-
-**Solution:**
-
-```powershell
-python -m spacy download en_core_web_trf
-# Fallback (smaller model):
-python -m spacy download en_core_web_sm
-```
-
-### Issue: "LLM API key invalid"
-
-**Cause:** Expired or incorrect API key in `.env`
-
-**Solution:**
-
-1. Check `DEEPSEEK_API_KEY` in `.env`
-2. Verify key is active on provider's dashboard
-3. Test with `curl` if possible
-
-### Issue: Memory errors with embedding models
-
-**Cause:** Insufficient RAM for both models + FAISS indexes
-
-**Solution:**
-
-- Use only one embedding model (set `MODEL_A_NAME` only)
-- Or reduce `top_k` parameter
-- Consider GPU acceleration with `pip install torch-cuda`
-
-### Issue: Slow vector search
-
-**Cause:** FAISS index not optimized or using CPU
-
-**Solution:**
-
-```python
-# In vector_retriever.py, use GPU-backed FAISS
-# index = faiss.index_gpu_to_cpu(gpu_index)  # Convert after GPU search
-```
+| Color                                                                    | RGB                  | Use                 |
+| ------------------------------------------------------------------------ | -------------------- | ------------------- |
+| <span style="color:rgb(4, 245, 255); font-weight:bold;">● Cyan</span>    | `rgb(4, 245, 255)`   | Highlights, accents |
+| <span style="color:rgb(233, 0, 82); font-weight:bold;">● Pink</span>     | `rgb(233, 0, 82)`    | Warnings, important |
+| <span style="color:rgb(0, 255, 133); font-weight:bold;">● Green</span>   | `rgb(0, 255, 133)`   | Success, positive   |
+| <span style="color:rgb(56, 0, 60); font-weight:bold;">● Purple</span>    | `rgb(56, 0, 60)`     | Background, muted   |
+| <span style="color:rgb(255, 255, 255); font-weight:bold;">● White</span> | `rgb(255, 255, 255)` | Text, primary       |
 
 ---
 
 ## 🤝 Team & Contributing
 
-This project was developed as part of **ACL M3 course work** on advanced NLP & knowledge graphs.
+This project was developed as part of **Advanced Computer Lab Milestone 3 course work** on AI tools at The German University in Cairo, CSEN 903.
 
 ### Key Components Built By
 
@@ -676,13 +564,13 @@ This project was developed as part of **ACL M3 course work** on advanced NLP & k
 
 ### Future Work
 
-- [ ] Add captaincy prediction using form trends
-- [ ] Implement multi-turn conversation state
+- [ ] Add `value`, `selected_by`, `transfer_balance` for actual FPL transfers recommendations
+- [ ] Add KG relations between Players & Teams
 - [ ] Optimize FAISS indexes for faster search
 - [ ] Add more LLM providers (Claude, GPT-4)
 - [ ] Cache common queries for faster responses
 - [ ] Implement streaming responses for long answers
-- [ ] Add user feedback loop for fine-tuning
+- [ ] Add user feedback loop for fine-tuning (PPO)
 
 ---
 
@@ -691,18 +579,3 @@ This project was developed as part of **ACL M3 course work** on advanced NLP & k
 This project is for educational purposes as part of ACL coursework.
 
 ---
-
-## 📞 Support
-
-For issues, check:
-
-1. `STARTING.md` — Quick setup guide
-2. `schema.md` — Data structure documentation
-3. `checklist.md` — Development phases
-4. GitHub Issues (if applicable)
-
----
-
-**Last Updated:** December 2025  
-**Status:** Active Development  
-**Python Version:** 3.9+
