@@ -100,6 +100,7 @@ def neo4j_to_visjs_graph(
         "embedding",
         "embeddings",
         "id",
+        "vector",
     }
 
     # Process nodes

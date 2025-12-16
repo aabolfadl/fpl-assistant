@@ -81,7 +81,7 @@ with st.sidebar:
         embedding_model_choice = None
 
     k = st.number_input(
-        "Top-K results (for retrieval)", min_value=1, max_value=20, value=5
+        "Top-K results (for retrieval)", min_value=1, max_value=38, value=5
     )
 
 # Chat history in session state
@@ -252,11 +252,21 @@ if user_input:
                 )
                 print("\n\n####### Vector retrieval result: #######\n\n")
                 print(retrieved_context)
+                # Capture graph visualization if available
+                if retrieved_context.get("graph_nodes") and retrieved_context.get(
+                    "graph_edges"
+                ):
+                    graph_html_content = generate_html_visualization(
+                        retrieved_context.get("graph_nodes", []),
+                        retrieved_context.get("graph_edges", []),
+                        height=600,
+                    )
             except Exception as e:
                 retrieved_context = {"error": str(e)}
                 print("\n\n####### Vector retrieval error: #######\n\n")
                 print(retrieved_context)
-            st.session_state.last_graph_html = None
+                graph_html_content = None
+            st.session_state.last_graph_html = graph_html_content
             st.session_state.last_retrieval_mode = "Embeddings (Vector)"
 
         elif retrieval_mode == "Hybrid":
@@ -296,6 +306,17 @@ if user_input:
                 v_res = vector_retriever.vector_search(
                     entities, top_k=k, model_choice=embedding_model_choice
                 )
+                # Capture graph visualization from vector if cypher didn't provide one
+                if (
+                    not graph_html_content
+                    and v_res.get("graph_nodes")
+                    and v_res.get("graph_edges")
+                ):
+                    graph_html_content = generate_html_visualization(
+                        v_res.get("graph_nodes", []),
+                        v_res.get("graph_edges", []),
+                        height=600,
+                    )
             except Exception as e:
                 v_res = {"error": str(e)}
 

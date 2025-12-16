@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 import faiss
 import streamlit as st
+from modules.graph_visualizer import neo4j_to_visjs_graph
 
 # Load .env DO NOT REMOVE THIS because settings.py is not imported here
 load_dotenv()
@@ -100,18 +101,61 @@ def _fetch_sources(tx, embedding_node_ids):
     q = """
     UNWIND $embedding_ids AS eid
     MATCH (e:Embedding) WHERE id(e) = eid
-    OPTIONAL MATCH (src)<-[:HAS_EMBEDDING]-(e)
+    OPTIONAL MATCH (src)-[:HAS_EMBEDDING]->(e)
     RETURN
         id(e) AS embedding_id,
         e.model AS model,
         e.text AS text,
         id(src) AS source_node_id,
         e.source_label AS source_label,
-        src.player_name AS player_name,
-        src.name AS team_name
+        src.player_name AS player_name
     """
     res = tx.run(q, embedding_ids=embedding_node_ids)
     return [dict(r) for r in res]
+
+
+def _fetch_graph(tx, embedding_ids):
+    q = """
+    UNWIND $embedding_ids AS eid
+    MATCH (e:Embedding) WHERE id(e) = eid
+    MATCH (e)-[r]-(p:Player)
+    RETURN
+        collect(DISTINCT e) AS source_nodes,
+        collect(DISTINCT p) AS neighbor_nodes,
+        collect(DISTINCT r) AS edges
+    """
+    res = tx.run(q, embedding_ids=embedding_ids).single()
+
+    if not res:
+        return [], []
+
+    raw_nodes = [
+        n for n in (res["source_nodes"] + res["neighbor_nodes"]) if n is not None
+    ]
+    raw_edges = [e for e in res["edges"] if e is not None]
+
+    # Convert Neo4j node objects to dictionaries
+    nodes = []
+    for node in raw_nodes:
+        node_dict = dict(node)
+        node_dict["id"] = id(node)  # Use Neo4j internal node id
+        nodes.append(node_dict)
+
+    # Convert Neo4j relationship objects to dictionaries
+    edges = []
+    for rel in raw_edges:
+        edge_dict = {
+            "start_node_id": id(rel.start_node),
+            "end_node_id": id(rel.end_node),
+            "type": rel.type,
+        }
+        # Include relationship properties
+        edge_dict.update(dict(rel))
+        edges.append(edge_dict)
+
+    print(f"Fetched {len(nodes)} nodes and {len(edges)} edges from Neo4j.")
+
+    return nodes, edges
 
 
 # =========================
@@ -163,15 +207,22 @@ def vector_search(entities: dict, top_k: int = 5, model_choice: str = "A") -> di
             }
         )
 
-    # -------- 4. Retrieve Neo4j source nodes --------
     embedding_ids = list({h["embedding_node_id"] for h in hits})
 
     with driver.session() as session:
         sources = session.read_transaction(_fetch_sources, embedding_ids)
+
+        print("Number of embedding_ids:", len(embedding_ids))
+
+        neo4j_nodes, neo4j_edges = session.read_transaction(_fetch_graph, embedding_ids)
+
+    vis_nodes, vis_edges = neo4j_to_visjs_graph(neo4j_nodes, neo4j_edges)
 
     return {
         "query_text": query_text,
         "model_used": model_choice,
         "hits": hits,
         "sources": sources,
+        "graph_nodes": vis_nodes,
+        "graph_edges": vis_edges,
     }
