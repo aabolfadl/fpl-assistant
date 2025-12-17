@@ -336,6 +336,10 @@ if user_input:
                 cypher_results.append(ctx)
             # Filter out entries with an 'error' field
             retrieved_context = [res for res in cypher_results if not res.get("error")]
+            # Remove graph data from context before passing to LLM
+            for ctx in retrieved_context:
+                ctx.pop("graph_nodes", None)
+                ctx.pop("graph_edges", None)
             st.session_state.last_graph_html = graph_html_content
             st.session_state.last_retrieval_mode = "Baseline (Cypher)"
 
@@ -408,6 +412,10 @@ if user_input:
             filtered_cypher_contexts = [
                 res for res in cypher_contexts if not res.get("error")
             ]
+            # Remove graph data from cypher contexts before passing to LLM
+            for ctx in filtered_cypher_contexts:
+                ctx.pop("graph_nodes", None)
+                ctx.pop("graph_edges", None)
 
             merged_nodes = all_cypher_nodes
             merged_edges = all_cypher_edges
@@ -475,9 +483,22 @@ if user_input:
                         vis_nodes, vis_edges, height=600
                     )
 
+                # Filter out graph data from results before passing to LLM
+                clean_results = []
+                for result in cypher_results:
+                    if isinstance(result, dict):
+                        clean_result = {
+                            k: v
+                            for k, v in result.items()
+                            if k not in ["graph_nodes", "graph_edges"]
+                        }
+                        clean_results.append(clean_result)
+                    else:
+                        clean_results.append(result)
+
                 retrieved_context = {
                     "cypher_query": cypher_query,
-                    "results": cypher_results,
+                    "results": clean_results,
                 }
             except Exception as e:
                 retrieved_context = {"error": str(e)}
