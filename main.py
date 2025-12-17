@@ -231,6 +231,14 @@ def remap_edges(edges, id_map):
     return remapped
 
 
+def filter_edges(edges, valid_node_ids):
+    filtered = []
+    for edge in edges:
+        if edge["from"] in valid_node_ids and edge["to"] in valid_node_ids:
+            filtered.append(edge)
+    return filtered
+
+
 def placeholder_retrieve(intent, entities, mode, k=5):
     """Return a placeholder context when modules aren't implemented yet."""
     now = datetime.utcnow().isoformat()
@@ -308,6 +316,12 @@ if user_input:
                         and ctx.get("graph_nodes")
                         and ctx.get("graph_edges")
                     ):
+                        valid_node_ids = {
+                            node["id"] for node in ctx.get("graph_nodes", [])
+                        }
+                        ctx["graph_edges"] = filter_edges(
+                            ctx.get("graph_edges", []), valid_node_ids
+                        )
                         graph_html_content = generate_html_visualization(
                             ctx.get("graph_nodes", []),
                             ctx.get("graph_edges", []),
@@ -337,6 +351,12 @@ if user_input:
                 if retrieved_context.get("graph_nodes") and retrieved_context.get(
                     "graph_edges"
                 ):
+                    valid_node_ids = {
+                        node["id"] for node in retrieved_context.get("graph_nodes", [])
+                    }
+                    retrieved_context["graph_edges"] = filter_edges(
+                        retrieved_context.get("graph_edges", []), valid_node_ids
+                    )
                     graph_html_content = generate_html_visualization(
                         retrieved_context.get("graph_nodes", []),
                         retrieved_context.get("graph_edges", []),
@@ -368,7 +388,14 @@ if user_input:
                     if c_res.get("graph_nodes"):
                         all_cypher_nodes.extend(c_res.get("graph_nodes", []))
                     if c_res.get("graph_edges"):
-                        all_cypher_edges.extend(c_res.get("graph_edges", []))
+                        # Filter edges within this cypher context
+                        valid_node_ids_cypher = {
+                            node["id"] for node in c_res.get("graph_nodes", [])
+                        }
+                        filtered_cypher_edges = filter_edges(
+                            c_res.get("graph_edges", []), valid_node_ids_cypher
+                        )
+                        all_cypher_edges.extend(filtered_cypher_edges)
                 except Exception as e:
                     c_res = {"intent": intent, "error": str(e)}
                     print(
@@ -393,6 +420,10 @@ if user_input:
                 all_vector_nodes = v_res.get("graph_nodes", [])
                 all_vector_edges = v_res.get("graph_edges", [])
 
+                # Filter edges within the vector context
+                valid_node_ids_vector = {node["id"] for node in all_vector_nodes}
+                all_vector_edges = filter_edges(all_vector_edges, valid_node_ids_vector)
+
                 print(all_cypher_nodes[0])
                 print(all_vector_nodes[7])
 
@@ -406,6 +437,8 @@ if user_input:
                 v_res = {"error": str(e)}
 
             if merged_nodes or merged_edges:
+                valid_node_ids = {node["id"] for node in merged_nodes}
+                merged_edges = filter_edges(merged_edges, valid_node_ids)
                 graph_html_content = generate_html_visualization(
                     merged_nodes,
                     merged_edges,
