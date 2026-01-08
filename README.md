@@ -2,6 +2,8 @@
 
 > **A Retrieval-Augmented Generation (RAG) system for intelligent Fantasy Premier League analysis using Neo4j knowledge graphs, semantic embeddings, and large language models.**
 
+📊 **[View Full Presentation](https://docs.google.com/presentation/d/1iLP3R66Uuv8ef7xdOnurZQ_TR517fWh4z0qglueGrXw/edit?slide=id.g3b0f5e9e03f_0_29#slide=id.g3b0f5e9e03f_0_29)**
+
 ---
 
 ## 🎯 Overview
